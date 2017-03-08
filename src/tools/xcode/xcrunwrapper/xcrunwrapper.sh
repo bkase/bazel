@@ -53,10 +53,44 @@ fi
 
 # Subsitute toolkit path placeholders.
 UPDATEDARGS=()
+SPLITARGS=()
+USE_CLANG39=""
 for ARG in "$@" ; do
+  # Split args that bazel doesn't want us to duplicate :/
+  if [[ $ARG == *"__PIN_SPLIT__"* ]]; then
+    SPLITARGS+=("$(echo ${ARG} | awk -F__PIN_SPLIT__ '{ print $1 }')")
+    SPLITARGS+=("$(echo ${ARG} | awk -F__PIN_SPLIT__ '{ print $2 }')")
+  else
+    SPLITARGS+=("${ARG}")
+  fi
+done
+
+for ARG in "${SPLITARGS[@]}" ; do
+  if [[ $ARG == "__USE_CLANG39__" ]]; then
+    USE_CLANG39=1
+    continue
+  fi
   ARG="${ARG//__BAZEL_XCODE_DEVELOPER_DIR__/${WRAPPER_DEVDIR}}"
   ARG="${ARG//__BAZEL_XCODE_SDKROOT__/${WRAPPER_SDKROOT}}"
+  # Find args that bazel doesn't let us point to
+  if [[ $ARG == *"__PIN_FIND__"* ]]; then
+    # 1. First we strip the find prefix
+    ARG="${ARG//__PIN_FIND__/}"
+    # 2. Then we resolve symlinks to a fixpoint
+    # Replacement for readlink -f on OSX
+    # see http://stackoverflow.com/questions/7665/how-to-resolve-symbolic-links-in-a-shell-script
+    ARG="$(perl -MCwd -le 'print Cwd::abs_path(shift)' "$(find . -name "$ARG" | head -1)")"
+    # 3. We can't MMAP on N processes concurrently for N > 1
+    #    so atomically copy this file to potentially MMAP the copy
+    cp "$ARG" $(basename "$ARG")
+    ARG=$(basename "$ARG")
+  fi
   UPDATEDARGS+=("${ARG}")
 done
 
-/usr/bin/xcrun "${TOOLNAME}" "${UPDATEDARGS[@]}"
+if [[ ! -z $USE_CLANG39 ]]; then
+  TOOL=$(find . -name "__PIN__${TOOLNAME}.h" | head -1)
+  exec ${TOOL} "${UPDATEDARGS[@]}"
+else
+  /usr/bin/xcrun "${TOOLNAME}" "${UPDATEDARGS[@]}"
+fi

@@ -113,14 +113,14 @@ public class TreePruner {
     public void visitLambda(JCLambda tree) {
       if (tree.getBodyKind() == BodyKind.STATEMENT) {
         JCExpression ident = make.at(tree).QualIdent(symtab.assertionErrorType.tsym);
-        JCThrow throwTree = make.Throw(make.NewClass(null, List.nil(), ident, List.nil(), null));
-        tree.body = make.Block(0, List.of(throwTree));
+        JCThrow throwTree = make.Throw(make.NewClass(null, List.<JCExpression>nil(), ident, List.<JCExpression>nil(), null));
+        tree.body = make.Block(0, List.<JCStatement>of(throwTree));
       }
     }
 
     @Override
     public void visitBlock(JCBlock tree) {
-      tree.stats = List.nil();
+      tree.stats = List.<JCStatement>nil();
     }
 
     @Override
